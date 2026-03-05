@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <section class="header" style="margin-top:10px">
+    <div>
+      <h1 class="title">Account</h1>
+      <p class="subtitle">Sign in to screen and rank candidates.</p>
+    </div>
+    <div class="meta">
+      <span class="chip">Secure password hashing</span>
+      <span class="chip">SQLite persistence</span>
+    </div>
+  </section>
+
+  {% if error %}
+    <div class="err" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <div class="auth-grid">
+    <section class="card auth-card">
+      <h2 class="card-title">Login</h2>
+      <p class="muted" style="margin-top:6px">Use your existing account.</p>
+
+      <form method="post" action="/login" class="auth-form" autocomplete="on">
+        <input type="hidden" name="next" value="{{ next or '/' }}" />
+
+        <div class="field">
+          <label for="login_username">Username or Email</label>
+          <input id="login_username" name="username" type="text" autocomplete="username" required value="{{ login_username or '' }}" placeholder="username or example@gmail.com" />
+        </div>
+
+        <div class="field">
+          <label for="login_password">Password</label>
+          <input id="login_password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+
+        <div class="actions" style="margin-top:10px">
+          <button type="submit">Login</button>
+          <a class="link" href="/#terms">Terms</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card auth-card">
+      <h2 class="card-title">Create account</h2>
+      <p class="muted" style="margin-top:6px">New here? Register in seconds.</p>
+
+      <form method="post" action="/register" class="auth-form" autocomplete="on">
+        <input type="hidden" name="next" value="{{ next or '/' }}" />
+
+        <div class="field">
+          <label for="reg_username">Username</label>
+          <input id="reg_username" name="username" type="text" autocomplete="username" required value="{{ reg_username or '' }}" />
+        </div>
+
+        <div class="field">
+          <label for="reg_email">Gmail</label>
+          <input id="reg_email" name="email" type="email" autocomplete="email" required value="{{ reg_email or '' }}" placeholder="example@gmail.com" />
+        </div>
+
+        <div class="field">
+          <label for="reg_password">Password</label>
+          <input id="reg_password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+          <div class="hint">Minimum 8 characters.</div>
+        </div>
+
+        <div class="field">
+          <label for="reg_password2">Confirm password</label>
+          <input id="reg_password2" name="password2" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
+
+        <label class="check">
+          <input type="checkbox" name="accept_terms" required />
+          <span>I agree to the <a class="link" href="/#terms">Terms &amp; Conditions</a></span>
+        </label>
+
+        <div class="actions" style="margin-top:10px">
+          <button type="submit">Register</button>
+        </div>
+      </form>
+    </section>
+  </div>
+{% endblock %}

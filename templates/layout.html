@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="navbar-inner container">
+        <a class="brand" href="/">{{ app_name }}</a>
+
+        <div class="nav-links" aria-label="Primary">
+          <a href="/#screen">Screen</a>
+          <a href="/#results">Results</a>
+        </div>
+
+        <div class="nav-auth">
+          {% if user %}
+            <div class="signed-in">
+              Signed in as <strong>{{ user.username }}</strong>
+            </div>
+            <form method="post" action="/logout">
+              <button type="submit" class="btn-secondary">Logout</button>
+            </form>
+          {% else %}
+            <a class="btn-link" href="{{ url_for('auth', next=request.full_path) }}">Login</a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    <main class="container">
+      {% block content %}{% endblock %}
+
+      <footer class="footer">
+        <div class="footer-inner">
+          <div>
+            <div class="footer-title">{{ app_name }}</div>
+            <div class="muted">Resume screening & ranking using NLP.</div>
+          </div>
+          <div>
+            <div class="muted">Tip: Score = 0.7 × similarity + 0.3 × skill overlap ratio.</div>
+            {% if github_url or linkedin_url or instagram_url %}
+              <div class="socials" aria-label="Contact links">
+                {% if github_url %}
+                  <a class="social-link" href="{{ github_url }}" target="_blank" rel="noopener noreferrer">
+                    <span class="social-icon" aria-hidden="true">GH</span>
+                    <span>GitHub</span>
+                  </a>
+                {% endif %}
+                {% if linkedin_url %}
+                  <a class="social-link" href="{{ linkedin_url }}" target="_blank" rel="noopener noreferrer">
+                    <span class="social-icon" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                {% endif %}
+                {% if instagram_url %}
+                  <a class="social-link" href="{{ instagram_url }}" target="_blank" rel="noopener noreferrer">
+                    <span class="social-icon" aria-hidden="true">IG</span>
+                    <span>Instagram</span>
+                  </a>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="footer-legal">
+          <details id="terms">
+            <summary>Terms &amp; Conditions</summary>
+            <div class="legal-body">
+              <ul>
+                <li>Results are approximate and may be inaccurate; always review resumes manually.</li>
+                <li>Do not upload sensitive personal data unless you have permission.</li>
+                <li>Avoid discriminatory decisions; use this only as one input to hiring.</li>
+                <li>Resumes are processed in-memory by default and are not intentionally stored.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details>
+            <summary>Developer</summary>
+            <div class="legal-body">
+              <div><strong>Developer:</strong> {{ developer_name }}</div>
+              <div class="muted" style="margin-top:6px">Built with Flask, pdfplumber, and scikit-learn.</div>
+              <div class="muted" style="margin-top:6px">&copy; {{ current_year }} {{ developer_name }}.</div>
+            </div>
+          </details>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>

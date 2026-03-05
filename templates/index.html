@@ -1,0 +1,127 @@
+{% extends "layout.html" %}
+
+{% block content %}
+      <header class="header">
+        <div>
+          <h1 class="title">AI Resume Screening</h1>
+          <p class="subtitle">Upload PDFs → extract skills → rank candidates vs a Job Description</p>
+        </div>
+      </header>
+
+      <section class="card" id="screen">
+        <form method="post" action="/screen" enctype="multipart/form-data" class="form">
+          <div class="form-row">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <label for="job_description">Job Description</label>
+                <div class="hint">Paste the JD text (responsibilities + required skills). More specific JD → better ranking.</div>
+                <textarea id="job_description" name="job_description" placeholder="Example: Looking for a Python + Flask developer with NLP experience..." required>{{ job_description or '' }}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="step">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <label for="resumes">Resumes (PDF)</label>
+                <div class="hint">Select one or many PDFs. (Scanned/image-only PDFs may extract little text.)</div>
+                <input id="resumes" name="resumes" type="file" accept="application/pdf" multiple required />
+                <div id="fileHelp" class="file-help" aria-live="polite">No files selected.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="step">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <label for="top_k">Skills to show (per resume)</label>
+                <div class="hint">This only affects display; scoring uses all matched skills.</div>
+                <input id="top_k" name="top_k" type="number" min="3" max="50" value="{{ top_k or 15 }}" />
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit">Rank Candidates</button>
+            <p class="privacy">
+              {% if user %}
+                Files are processed in-memory for this demo; nothing is saved to disk.
+              {% else %}
+                Please sign in to rank candidates.
+              {% endif %}
+            </p>
+          </div>
+
+          {% if error %}
+            <div class="err" role="alert">{{ error }}</div>
+          {% endif %}
+        </form>
+      </section>
+
+      {% if results %}
+        <section class="card" id="results" style="margin-top:16px">
+          <div class="card-head">
+            <h2>Results</h2>
+            <p class="muted">Sorted by score (higher is better).</p>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Candidate</th>
+                  <th>Score</th>
+                  <th>Text similarity</th>
+                  <th>Matched skills</th>
+                  <th>All extracted skills</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in results %}
+                  <tr>
+                    <td class="rank">#{{ loop.index }}</td>
+                    <td>
+                      <div class="file"><strong>{{ r.filename }}</strong></div>
+                      {% if r.name_guess %}
+                        <div class="muted">{{ r.name_guess }}</div>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <div class="score">
+                        <span class="score-pill">{{ '%.3f'|format(r.score) }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="metric">
+                        <div class="bar" aria-hidden="true">
+                          <div class="bar-fill" data-width="{{ (r.similarity * 100) | round(0) }}"></div>
+                        </div>
+                        <div class="muted">{{ '%.3f'|format(r.similarity) }}</div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="muted" style="margin-bottom:6px">{{ r.skill_overlap_count }} / {{ r.jd_skills_count }}</div>
+                      {% if r.matched_skills %}
+                        {% for s in r.matched_skills[:top_k] %}
+                          <span class="badge badge-strong">{{ s }}</span>
+                        {% endfor %}
+                      {% else %}
+                        <span class="muted">No matched skills</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% for s in r.skills[:top_k] %}
+                        <span class="badge">{{ s }}</span>
+                      {% endfor %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {% endif %}
+{% endblock %}

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ai-resume-screening
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT wsgi:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      # Optional: persistent DB requires a Render Disk + DATABASE_PATH pointing to it.
+      # - key: DATABASE_PATH
+      #   value: /var/data/resume_screening.db
