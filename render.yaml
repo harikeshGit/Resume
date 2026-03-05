@@ -3,9 +3,13 @@ services:
     name: ai-resume-screening
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: python -m pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT wsgi:app
     envVars:
+      # scikit-learn wheels are not available for every Python release.
+      # Pin to a widely-supported version to avoid source builds.
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SECRET_KEY
         generateValue: true
       # Optional: persistent DB requires a Render Disk + DATABASE_PATH pointing to it.
