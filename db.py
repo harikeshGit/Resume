@@ -85,7 +85,11 @@ def db_cursor(db_path: str) -> Iterator[sqlite3.Cursor]:
 
 def get_user_by_username(db_path: str, username: str) -> Optional[sqlite3.Row]:
     with connect(db_path) as conn:
-        return conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        normalized = (username or "").strip().lower()
+        return conn.execute(
+            "SELECT * FROM users WHERE lower(username) = ?",
+            (normalized,),
+        ).fetchone()
 
 
 def get_user_by_email(db_path: str, email: str) -> Optional[sqlite3.Row]:
