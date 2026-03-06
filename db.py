@@ -90,7 +90,11 @@ def get_user_by_username(db_path: str, username: str) -> Optional[sqlite3.Row]:
 
 def get_user_by_email(db_path: str, email: str) -> Optional[sqlite3.Row]:
     with connect(db_path) as conn:
-        return conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        normalized = (email or "").strip().lower()
+        return conn.execute(
+            "SELECT * FROM users WHERE lower(email) = ?",
+            (normalized,),
+        ).fetchone()
 
 
 def get_user_by_id(db_path: str, user_id: int) -> Optional[sqlite3.Row]:
