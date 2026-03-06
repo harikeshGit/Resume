@@ -349,8 +349,12 @@ def create_app() -> Flask:
     return app
 
 
+# Expose a module-level WSGI app for production servers like Gunicorn.
+# This enables both `gunicorn app:app` (Render default patterns) and local imports.
+app = create_app()
+
+
 if __name__ == "__main__":
-    app = create_app()
     app.run(
         host="127.0.0.1",
         port=int(os.environ.get("PORT", "5000")),

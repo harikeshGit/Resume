@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from app import create_app
-
-app = create_app()
+# Keep this module as the Render/Gunicorn entrypoint.
+# It simply re-exports the Flask app created in `app.py`.
+from app import app
