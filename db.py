@@ -13,8 +13,19 @@ class DbConfig:
 
 
 def default_db_path() -> str:
-    # Keep DB out of git by using instance/ (already in .gitignore)
-    return os.environ.get("DATABASE_PATH", os.path.join("instance", "resume_screening.db"))
+    # Priority:
+    # 1) DATABASE_PATH env var
+    # 2) Render Disk mount (common mountPath: /var/data)
+    # 3) Local instance/ folder (kept out of git)
+    configured = (os.environ.get("DATABASE_PATH") or "").strip()
+    if configured:
+        return configured
+
+    # If a persistent disk is mounted, use it automatically.
+    if os.path.isdir("/var/data"):
+        return os.path.join("/var/data", "resume_screening.db")
+
+    return os.path.join("instance", "resume_screening.db")
 
 
 def connect(db_path: str) -> sqlite3.Connection:

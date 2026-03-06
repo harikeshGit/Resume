@@ -50,10 +50,14 @@ For local development on Windows, continue using `python app.py`.
 ### Persisting the SQLite DB (optional)
 
 By default, Render’s filesystem can be ephemeral depending on plan/settings.
-If you want your SQLite data to persist:
+If you don't persist the DB, accounts may disappear after redeploy/restart and users will see "Invalid username or password" even if they registered earlier.
+
+To make accounts persist:
 
 1. Add a **Render Disk** to the service (e.g. mount to `/var/data`)
 2. Set `DATABASE_PATH=/var/data/resume_screening.db`
+
+This repo's `render.yaml` is configured to use `/var/data/resume_screening.db` when a disk is mounted.
 
 ## Notes
 

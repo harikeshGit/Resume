@@ -5,6 +5,10 @@ services:
     plan: free
     buildCommand: python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       # scikit-learn wheels are not available for every Python release.
       # Pin to a widely-supported version to avoid source builds.
@@ -12,6 +16,5 @@ services:
         value: 3.11.11
       - key: SECRET_KEY
         generateValue: true
-      # Optional: persistent DB requires a Render Disk + DATABASE_PATH pointing to it.
-      # - key: DATABASE_PATH
-      #   value: /var/data/resume_screening.db
+      - key: DATABASE_PATH
+        value: /var/data/resume_screening.db

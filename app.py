@@ -9,7 +9,13 @@ import re
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from resume_screener import extract_text_from_pdf_bytes, rank_resumes
+from resume_screener import (
+    ats_scan_resume,
+    extract_text_and_page_count_from_pdf_bytes,
+    extract_text_from_pdf_bytes,
+    generate_ats_optimized_resume,
+    rank_resumes,
+)
 
 from db import (
     default_db_path,
@@ -55,11 +61,11 @@ def create_app() -> Flask:
 
     def safe_next(next_url: str | None) -> str:
         if not next_url:
-            return url_for("index")
+            return url_for("screening")
         # Avoid open-redirects: only allow same-site relative paths.
         if next_url.startswith("/") and not next_url.startswith("//"):
             return next_url
-        return url_for("index")
+        return url_for("screening")
 
     @app.context_processor
     def inject_globals():
@@ -77,21 +83,41 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))
 
     @app.get("/")
-    def index():
+    def welcome():
+        return render_template("welcome.html")
+
+    @app.get("/app")
+    def app_home():
+        return redirect(url_for("screening"))
+
+    @app.get("/screening")
+    def screening():
         return render_template(
-            "index.html",
+            "screening.html",
             results=None,
             error=None,
             job_description="",
             top_k=15,
         )
 
+    @app.get("/ats")
+    def ats():
+        return render_template(
+            "ats.html",
+            ats_report=None,
+            ats_error=None,
+            ats_job_description="",
+            ats_draft=None,
+            ats_draft_report=None,
+            ats_draft_suggestions=None,
+        )
+
     @app.get("/auth")
     def auth():
         if current_user():
-            return redirect(url_for("index"))
+            return redirect(url_for("screening"))
 
-        next_url = request.args.get("next") or "/"
+        next_url = request.args.get("next") or "/screening"
         return render_template(
             "auth.html",
             error=None,
@@ -246,13 +272,13 @@ def create_app() -> Flask:
     def logout():
         session.pop("user_id", None)
         session.pop("username", None)
-        return redirect(url_for("index"))
+        return redirect(url_for("welcome"))
 
     @app.post("/screen")
     def screen():
         user = current_user()
         if not user:
-            return redirect(url_for("auth", next="/#screen"))
+            return redirect(url_for("auth", next="/screening#screen"))
 
         job_description = (request.form.get("job_description") or "").strip()
         top_k_raw = (request.form.get("top_k") or "15").strip()
@@ -264,7 +290,7 @@ def create_app() -> Flask:
         files = request.files.getlist("resumes")
         if not files:
             return render_template(
-                "index.html",
+                "screening.html",
                 results=None,
                 error="Please upload at least one PDF resume.",
                 job_description=job_description,
@@ -279,7 +305,7 @@ def create_app() -> Flask:
             filename = f.filename
             if not filename.lower().endswith(".pdf"):
                 return render_template(
-                    "index.html",
+                    "screening.html",
                     results=None,
                     error=f"Only PDF files are supported. Problem file: {filename}",
                     job_description=job_description,
@@ -297,7 +323,7 @@ def create_app() -> Flask:
             results = rank_resumes(job_description=job_description, resumes=resumes)
         except Exception as e:  # keep UX simple for a college demo
             return render_template(
-                "index.html",
+                "screening.html",
                 results=None,
                 error=str(e),
                 job_description=job_description,
@@ -339,11 +365,80 @@ def create_app() -> Flask:
             )
 
         return render_template(
-            "index.html",
+            "screening.html",
             results=results,
             error=None,
             job_description=job_description,
             top_k=top_k,
+        )
+
+    @app.post("/ats-scan")
+    def ats_scan():
+        """Free ATS resume scan (heuristics + NLP)."""
+        f = request.files.get("resume")
+        ats_job_description = (request.form.get("ats_job_description") or "").strip()
+
+        if not f or not f.filename:
+            return render_template(
+                "ats.html",
+                ats_report=None,
+                ats_error="Please upload a PDF resume to scan.",
+                ats_job_description=ats_job_description,
+                ats_draft=None,
+                ats_draft_report=None,
+                ats_draft_suggestions=None,
+            )
+
+        filename = f.filename
+        if not filename.lower().endswith(".pdf"):
+            return render_template(
+                "ats.html",
+                ats_report=None,
+                ats_error="Only PDF files are supported for ATS scan.",
+                ats_job_description=ats_job_description,
+                ats_draft=None,
+                ats_draft_report=None,
+                ats_draft_suggestions=None,
+            )
+
+        pdf_bytes = f.read()
+        text, page_count = extract_text_and_page_count_from_pdf_bytes(pdf_bytes)
+        if not text:
+            return render_template(
+                "ats.html",
+                ats_report=None,
+                ats_error="Could not extract text from this PDF (may be scanned/image-only).",
+                ats_job_description=ats_job_description,
+                ats_draft=None,
+                ats_draft_report=None,
+                ats_draft_suggestions=None,
+            )
+
+        report = ats_scan_resume(
+            filename=filename,
+            resume_text=text,
+            page_count=page_count,
+            job_description=ats_job_description or None,
+        )
+
+        ats_draft = None
+        ats_draft_report = None
+        ats_draft_suggestions = None
+        if int(report.score) < 85:
+            ats_draft, ats_draft_report, ats_draft_suggestions = generate_ats_optimized_resume(
+                filename=filename,
+                resume_text=text,
+                job_description=ats_job_description or None,
+            )
+
+        return render_template(
+            "ats.html",
+            ats_report=report,
+            ats_error=None,
+            ats_job_description=ats_job_description,
+            ats_draft=ats_draft,
+            ats_draft_report=ats_draft_report,
+            ats_draft_suggestions=ats_draft_suggestions,
         )
 
     return app

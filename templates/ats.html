@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <header class="header">
+    <div>
+      <h1 class="title">Free ATS Resume Scan</h1>
+      <p class="subtitle">Powered by AI (NLP) — checks keywords + structure for ATS-friendliness</p>
+    </div>
+  </header>
+
+  <section class="card" id="ats">
+    <div class="card-head">
+      <h2 style="margin:0">Scan your resume</h2>
+      <p class="muted">Upload one PDF and get an ATS score + tips.</p>
+    </div>
+
+    <form method="post" action="/ats-scan" enctype="multipart/form-data" class="form">
+      <div class="form-row">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <label for="ats_resume">Resume (PDF)</label>
+            <div class="hint">Upload one PDF resume to get an ATS score + improvement tips.</div>
+            <input id="ats_resume" name="resume" type="file" accept="application/pdf" required />
+            <div id="atsFileHelp" class="file-help" aria-live="polite">No file selected.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <label for="ats_job_description">Target Job Description (optional)</label>
+            <div class="hint">Paste JD to check keyword match (recommended for best ATS scan).</div>
+            <textarea id="ats_job_description" name="ats_job_description" placeholder="Optional: Paste the job description here...">{{ ats_job_description or '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Scan ATS</button>
+        <p class="privacy">Free scan. Files are processed in-memory for this demo.</p>
+      </div>
+
+      {% if ats_error %}
+        <div class="err" role="alert">{{ ats_error }}</div>
+      {% endif %}
+    </form>
+  </section>
+
+  {% if ats_report %}
+    <section class="card" id="ats-results" style="margin-top:16px">
+      <div class="card-head">
+        <h2>ATS Report</h2>
+        <p class="muted">{{ ats_report.filename }}{% if ats_report.page_count %} · {{ ats_report.page_count }} page(s){% endif %} · ~{{ ats_report.word_count }} words</p>
+      </div>
+
+      <div class="header" style="margin:0 0 12px">
+        <div class="meta">
+          <span class="chip">ATS Score <strong style="margin-left:6px">{{ ats_report.score }}/100</strong></span>
+          {% if ats_report.similarity is not none %}
+            <span class="chip">JD Similarity <strong style="margin-left:6px">{{ '%.3f'|format(ats_report.similarity) }}</strong></span>
+          {% else %}
+            <span class="chip">JD Similarity <span class="muted">(optional)</span></span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="metric" style="max-width:520px">
+        <div class="bar" aria-hidden="true">
+          <div class="bar-fill" data-width="{{ ats_report.score }}"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        {% for c in ats_report.checks %}
+          {% if c.status == 'good' %}
+            <div class="chip" style="margin:6px 6px 0 0">✓ {{ c.label }}</div>
+          {% else %}
+            <div class="chip" style="margin:6px 6px 0 0">⚠ {{ c.label }}</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {% if ats_report.matched_skills or ats_report.missing_skills %}
+        <div class="card" style="margin-top:14px">
+          <div class="card-head">
+            <h3 style="margin:0">Keyword Match</h3>
+            <p class="muted">Skills detected from resume vs target JD.</p>
+          </div>
+
+          {% if ats_report.matched_skills %}
+            <div class="muted" style="margin-bottom:6px">Matched</div>
+            {% for s in ats_report.matched_skills[:20] %}
+              <span class="badge badge-strong">{{ s }}</span>
+            {% endfor %}
+          {% else %}
+            <div class="muted">No matched skills detected (try adding JD).</div>
+          {% endif %}
+
+          {% if ats_report.missing_skills %}
+            <div class="muted" style="margin:12px 0 6px">Missing (from JD)</div>
+            {% for s in ats_report.missing_skills[:20] %}
+              <span class="badge">{{ s }}</span>
+            {% endfor %}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if ats_draft %}
+        <div class="card" style="margin-top:14px">
+          <div class="card-head">
+            <h3 style="margin:0">Generated ATS-Optimized Resume</h3>
+            <p class="muted">Auto-formatted from your existing resume data (no fake info added).</p>
+          </div>
+
+          {% if ats_draft_report %}
+            <div class="meta" style="margin-bottom:10px">
+              <span class="chip">Predicted ATS Score <strong style="margin-left:6px">{{ ats_draft_report.score }}/100</strong></span>
+              {% if ats_draft_report.similarity is not none %}
+                <span class="chip">Predicted JD Similarity <strong style="margin-left:6px">{{ '%.3f'|format(ats_draft_report.similarity) }}</strong></span>
+              {% endif %}
+            </div>
+
+            <div class="metric" style="max-width:520px">
+              <div class="bar" aria-hidden="true">
+                <div class="bar-fill" data-width="{{ ats_draft_report.score }}"></div>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if ats_draft_suggestions %}
+            <div class="file-help" style="margin-top:10px">
+              <strong>To push score higher:</strong>
+              <ul>
+                {% for s in ats_draft_suggestions %}
+                  <li>{{ s }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          <div class="actions" style="margin-top:12px">
+            <button type="button" id="downloadAtsDraft" class="btn-secondary">Download .txt</button>
+          </div>
+          <div class="hint">Tip: Review and edit this draft before using it for real applications.</div>
+          <textarea id="atsDraftText" readonly style="margin-top:10px;min-height:260px">{{ ats_draft }}</textarea>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}

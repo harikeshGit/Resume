@@ -10,14 +10,17 @@
   <body>
     <nav class="navbar">
       <div class="navbar-inner container">
-        <a class="brand" href="/">{{ app_name }}</a>
+        <a class="brand" href="{{ url_for('welcome') }}">{{ app_name }}</a>
 
         <div class="nav-links" aria-label="Primary">
-          <a href="/#screen">Screen</a>
-          <a href="/#results">Results</a>
+          <a href="{{ url_for('welcome') }}">Home</a>
+          <a href="{{ url_for('screening') }}#screen">Screen</a>
+          <a href="{{ url_for('ats') }}#ats">ATS Scan</a>
+          <a href="{{ url_for('screening') }}#results">Results</a>
         </div>
 
         <div class="nav-auth">
+          <button type="button" id="navBack" class="btn-secondary">Back</button>
           {% if user %}
             <div class="signed-in">
               Signed in as <strong>{{ user.username }}</strong>
