@@ -251,6 +251,13 @@ def generate_ats_optimized_resume(
     sections = _parse_sections(text)
     extracted_skills = extract_skills(normalized)
 
+    edu_hint_re = re.compile(
+        r"(?i)\b(b\.?\s?tech|m\.?\s?tech|bachelor|master|ph\.?d|university|college|school|cgpa|gpa|degree|diploma|graduation|class\s+\d{2})\b"
+    )
+    exp_hint_re = re.compile(
+        r"(?i)\b(intern|internship|developer|engineer|analyst|company|pvt\.?\s?ltd\.?|inc\.?|llc|technologies|experience|employment|worked)\b|\b(19|20)\d{2}\b"
+    )
+
     # Build a clean, ATS-friendly plain-text resume.
     header_lines: list[str] = []
     if name:
@@ -288,33 +295,43 @@ def generate_ats_optimized_resume(
 
     parts.append("SKILLS")
     if extracted_skills:
-        parts.append(", ".join(extracted_skills))
-    else:
-        parts.append("(Add your technical skills here.)")
+        # Bulleted skills help ATS readability and satisfy "bullets" checks.
+        parts.extend([f"- {s}" for s in extracted_skills])
     parts.append("")
 
     # Experience / Projects / Education: preserve original lines, but bulletize for ATS readability.
-    exp_bullets = _to_bullets(sections.get("experience") or [])
-    proj_bullets = _to_bullets(sections.get("projects") or [])
-    edu_bullets = _to_bullets(sections.get("education") or [])
-    other_bullets = _to_bullets(sections.get("other") or [], max_items=10)
+    # If the PDF has no clear headings, try a best-effort fallback from "other" lines.
+    other_lines = sections.get("other") or []
+    edu_fallback = [ln for ln in other_lines if edu_hint_re.search(ln)]
+    exp_fallback = [ln for ln in other_lines if exp_hint_re.search(ln) and ln not in edu_fallback]
+    remaining_other = [ln for ln in other_lines if ln not in edu_fallback and ln not in exp_fallback]
 
+    exp_src = (sections.get("experience") or exp_fallback) or []
+    proj_src = sections.get("projects") or []
+    edu_src = (sections.get("education") or edu_fallback) or []
+
+    exp_bullets = _to_bullets(exp_src, max_items=24)
+    proj_bullets = _to_bullets(proj_src, max_items=18)
+    edu_bullets = _to_bullets(edu_src, max_items=18)
+    other_bullets = _to_bullets(remaining_other, max_items=36)
+
+    # Always include standard headings so ATS section checks pass, but do not invent content.
+    parts.append("EXPERIENCE")
     if exp_bullets:
-        parts.append("EXPERIENCE")
         parts.extend(exp_bullets)
-        parts.append("")
+    parts.append("")
 
     if proj_bullets:
         parts.append("PROJECTS")
         parts.extend(proj_bullets)
         parts.append("")
 
+    parts.append("EDUCATION")
     if edu_bullets:
-        parts.append("EDUCATION")
         parts.extend(edu_bullets)
-        parts.append("")
+    parts.append("")
 
-    if other_bullets and not (exp_bullets or proj_bullets or edu_bullets):
+    if other_bullets:
         parts.append("DETAILS")
         parts.extend(other_bullets)
         parts.append("")
@@ -340,6 +357,36 @@ def generate_ats_optimized_resume(
         page_count=1,
         job_description=job_description,
     )
+
+    # Best-effort pass 2: if score is low mainly due to short content, include more real lines.
+    if int(draft_report.score) < 85:
+        draft_wc = len(re.findall(r"\b\w+\b", _normalize_text(draft_text)))
+        if draft_wc < 300 and remaining_other:
+            more_other = _to_bullets(remaining_other, max_items=70)
+            parts2 = [p for p in parts if True]
+            # Replace / append DETAILS with more content.
+            if "DETAILS" in parts2:
+                idx = parts2.index("DETAILS")
+                # Keep heading, replace bullets until next blank or end.
+                j = idx + 1
+                while j < len(parts2) and parts2[j] != "":
+                    j += 1
+                parts2 = parts2[: idx + 1] + more_other + parts2[j:]
+            else:
+                parts2.append("DETAILS")
+                parts2.extend(more_other)
+                parts2.append("")
+
+            draft_text2 = "\n".join(parts2).strip() + "\n"
+            draft_report2 = ats_scan_resume(
+                filename=f"ATS_Optimized_{filename}",
+                resume_text=draft_text2,
+                page_count=1,
+                job_description=job_description,
+            )
+            if int(draft_report2.score) >= int(draft_report.score):
+                draft_text = draft_text2
+                draft_report = draft_report2
 
     return draft_text, draft_report, suggestions
 

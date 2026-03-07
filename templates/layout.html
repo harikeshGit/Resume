@@ -46,7 +46,8 @@
           </div>
           <div>
             <div class="muted">Tip: Score = 0.7 × similarity + 0.3 × skill overlap ratio.</div>
-            {% if github_url or linkedin_url or instagram_url %}
+            <div class="footer-title" style="margin-top:10px">Contact Us</div>
+            {% if github_url or linkedin_url or instagram_url or developer_email %}
               <div class="socials" aria-label="Contact links">
                 {% if github_url %}
                   <a class="social-link" href="{{ github_url }}" target="_blank" rel="noopener noreferrer">
@@ -64,6 +65,12 @@
                   <a class="social-link" href="{{ instagram_url }}" target="_blank" rel="noopener noreferrer">
                     <span class="social-icon" aria-hidden="true">IG</span>
                     <span>Instagram</span>
+                  </a>
+                {% endif %}
+                {% if developer_email %}
+                  <a class="social-link" href="mailto:{{ developer_email }}">
+                    <span class="social-icon" aria-hidden="true">@</span>
+                    <span>Gmail</span>
                   </a>
                 {% endif %}
               </div>

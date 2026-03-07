@@ -48,29 +48,39 @@ def init_db(db_path: str) -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE IF NOT EXISTS screening_runs (
+            CREATE TABLE IF NOT EXISTS auth_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                job_description TEXT NOT NULL,
+                event_type TEXT NOT NULL CHECK (event_type IN ('login', 'logout')),
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
-
-            CREATE TABLE IF NOT EXISTS screening_results (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id INTEGER NOT NULL,
-                filename TEXT NOT NULL,
-                name_guess TEXT,
-                score REAL NOT NULL,
-                similarity REAL NOT NULL,
-                skill_overlap_count INTEGER NOT NULL,
-                jd_skills_count INTEGER NOT NULL,
-                matched_skills_json TEXT NOT NULL,
-                skills_json TEXT NOT NULL,
-                FOREIGN KEY(run_id) REFERENCES screening_runs(id) ON DELETE CASCADE
-            );
             """
         )
+
+        # Lightweight migration: older versions stored IP/User-Agent in auth_events.
+        # If those columns exist, rebuild the table to drop them.
+        auth_cols = [r["name"] for r in conn.execute("PRAGMA table_info(auth_events)").fetchall()]
+        if "ip" in auth_cols or "user_agent" in auth_cols:
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS auth_events_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    event_type TEXT NOT NULL CHECK (event_type IN ('login', 'logout')),
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+
+                INSERT INTO auth_events_new (id, user_id, event_type, created_at)
+                SELECT id, user_id, event_type, created_at FROM auth_events;
+
+                DROP TABLE auth_events;
+                ALTER TABLE auth_events_new RENAME TO auth_events;
+                """
+            )
+            conn.execute("PRAGMA foreign_keys = ON")
 
         # Lightweight migration for existing DBs: ensure users.email exists.
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()]

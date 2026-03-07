@@ -95,23 +95,47 @@
     attachFileHelp('resumes', 'fileHelp', 'No files selected.');
     attachFileHelp('ats_resume', 'atsFileHelp', 'No file selected.');
 
-    // Download ATS draft as .txt (client-side).
-    const dlBtn = document.getElementById('downloadAtsDraft');
+    // Download ATS draft as PDF (server-generated).
+    const dlPdfBtn = document.getElementById('downloadAtsDraftPdf');
     const draftTa = document.getElementById('atsDraftText');
-    if (dlBtn && draftTa) {
-        dlBtn.addEventListener('click', () => {
+    if (dlPdfBtn && draftTa) {
+        dlPdfBtn.addEventListener('click', async () => {
             const text = draftTa.value || '';
             if (!text.trim()) return;
 
-            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'ATS_Optimized_Resume.txt';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            const rawName = draftTa.getAttribute('data-filename') || 'resume';
+            const base = String(rawName).replace(/\.pdf$/i, '').replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80) || 'resume';
+            const filename = `ATS_Optimized_${base}.pdf`;
+
+            dlPdfBtn.disabled = true;
+            dlPdfBtn.classList.add('is-loading');
+
+            try {
+                const form = new FormData();
+                form.append('draft', text);
+                form.append('filename', base);
+
+                const resp = await fetch('/ats-draft-pdf', { method: 'POST', body: form });
+                if (!resp.ok) {
+                    throw new Error('PDF generation failed');
+                }
+
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch {
+                // Keep UX minimal; user can retry.
+                alert('Could not generate PDF. Please try again.');
+            } finally {
+                dlPdfBtn.disabled = false;
+                dlPdfBtn.classList.remove('is-loading');
+            }
         });
     }
 })();

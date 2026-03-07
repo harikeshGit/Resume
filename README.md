@@ -7,7 +7,7 @@ A small web app that:
 - Extracts text + skills
 - Ranks candidates using **TF‑IDF cosine similarity** + **skill overlap**
 - Supports **real login/register** with **hashed passwords**
-- Persists **screening runs/results** to **SQLite**
+- Persists **user accounts** and **login/logout events** to **SQLite**
 
 ## Run
 
@@ -29,6 +29,11 @@ Open: http://127.0.0.1:5000
 
 - SQLite database is created at `instance/resume_screening.db` (ignored by git).
 - You can override with `DATABASE_PATH`.
+
+Auth data persisted:
+
+- Users table (accounts)
+- Auth events (login/logout timestamps only; no IP/User-Agent)
 
 ## Deploy (Render)
 

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import datetime
 import os
-import json
 import sqlite3
 import re
+import io
+from importlib import import_module
 
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, abort, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from resume_screener import (
@@ -34,6 +35,7 @@ def create_app() -> Flask:
 
     app_name = os.environ.get("APP_NAME", "AI Resume Screening")
     developer_name = os.environ.get("DEVELOPER_NAME", "Harikesh Kumar")
+    developer_email = os.environ.get("DEVELOPER_EMAIL", "").strip()
     github_url = os.environ.get("GITHUB_URL", "https://github.com/harikeshGit").strip()
     linkedin_url = os.environ.get(
         "LINKEDIN_URL", "https://www.linkedin.com/in/harikesh-kumar-70062a258"
@@ -67,11 +69,103 @@ def create_app() -> Flask:
             return next_url
         return url_for("screening")
 
+    def _safe_download_stem(value: str) -> str:
+        stem = re.sub(r"\.pdf$", "", (value or ""), flags=re.IGNORECASE).strip()
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("_.-")
+        return (stem[:80] if stem else "resume")
+
+    def _draft_text_to_pdf_bytes(draft_text: str, *, title: str | None = None) -> io.BytesIO:
+        # Import lazily to avoid editor diagnostics issues and to keep startup light.
+        pagesizes = import_module("reportlab.lib.pagesizes")
+        units = import_module("reportlab.lib.units")
+        pdfmetrics = import_module("reportlab.pdfbase.pdfmetrics")
+        canvas_mod = import_module("reportlab.pdfgen.canvas")
+
+        letter = pagesizes.letter
+        inch = units.inch
+        Canvas = canvas_mod.Canvas
+
+        buf = io.BytesIO()
+        page_w, page_h = letter
+        margin = 0.75 * inch
+        max_w = page_w - 2 * margin
+        y = page_h - margin
+
+        body_font = "Helvetica"
+        body_size = 11
+        head_font = "Helvetica-Bold"
+        head_size = 12
+        line_h = 14
+
+        c = Canvas(buf, pagesize=letter)
+
+        def new_page():
+            nonlocal y
+            c.showPage()
+            y = page_h - margin
+
+        def ensure_space(lines: int = 1):
+            nonlocal y
+            if y - (lines * line_h) < margin:
+                new_page()
+
+        def wrap_line(text: str, font: str, size: int) -> list[str]:
+            words = (text or "").split()
+            if not words:
+                return [""]
+            out: list[str] = []
+            cur = ""
+            for w in words:
+                cand = (cur + " " + w).strip()
+                if pdfmetrics.stringWidth(cand, font, size) <= max_w:
+                    cur = cand
+                else:
+                    if cur:
+                        out.append(cur)
+                        cur = w
+                    else:
+                        # Single very long token; hard-split.
+                        out.append(cand[:160])
+                        cur = ""
+            if cur:
+                out.append(cur)
+            return out
+
+        # Optional title
+        if title:
+            ensure_space(2)
+            c.setFont(head_font, 14)
+            c.drawString(margin, y, title)
+            y -= line_h * 1.5
+
+        for raw in (draft_text or "").splitlines():
+            line = raw.rstrip()
+            if not line.strip():
+                ensure_space(1)
+                y -= line_h
+                continue
+
+            is_heading = line.strip() == line.strip().upper() and len(line.strip()) <= 32
+            font = head_font if is_heading else body_font
+            size = head_size if is_heading else body_size
+            c.setFont(font, size)
+
+            wrapped = wrap_line(line, font, size)
+            ensure_space(len(wrapped))
+            for wline in wrapped:
+                c.drawString(margin, y, wline)
+                y -= line_h
+
+        c.save()
+        buf.seek(0)
+        return buf
+
     @app.context_processor
     def inject_globals():
         return {
             "app_name": app_name,
             "developer_name": developer_name,
+            "developer_email": developer_email,
             "github_url": github_url,
             "linkedin_url": linkedin_url,
             "instagram_url": instagram_url,
@@ -153,6 +247,19 @@ def create_app() -> Flask:
 
         session["user_id"] = int(row["id"])
         session["username"] = str(row["username"])
+
+        # Persist login event (audit only).
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                conn.execute(
+                    "INSERT INTO auth_events (user_id, event_type) VALUES (?, 'login')",
+                    (int(row["id"]),),
+                )
+        except Exception:
+            # Keep UX simple; audit logging must not block auth.
+            pass
+
         return redirect(safe_next(next_url))
 
     @app.post("/register")
@@ -270,6 +377,20 @@ def create_app() -> Flask:
 
     @app.post("/logout")
     def logout():
+        user_id = session.get("user_id")
+
+        # Persist logout event (audit only).
+        if user_id:
+            try:
+                with sqlite3.connect(db_path) as conn:
+                    conn.execute("PRAGMA foreign_keys = ON")
+                    conn.execute(
+                        "INSERT INTO auth_events (user_id, event_type) VALUES (?, 'logout')",
+                        (int(user_id),),
+                    )
+            except Exception:
+                pass
+
         session.pop("user_id", None)
         session.pop("username", None)
         return redirect(url_for("welcome"))
@@ -328,40 +449,6 @@ def create_app() -> Flask:
                 error=str(e),
                 job_description=job_description,
                 top_k=top_k,
-            )
-
-        # Persist run + results for auditability.
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO screening_runs (user_id, job_description) VALUES (?, ?)",
-                (int(user["id"]), job_description),
-            )
-            run_id = int(cur.lastrowid)
-
-            cur.executemany(
-                """
-                INSERT INTO screening_results (
-                    run_id, filename, name_guess, score, similarity,
-                    skill_overlap_count, jd_skills_count,
-                    matched_skills_json, skills_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """.strip(),
-                [
-                    (
-                        run_id,
-                        r.filename,
-                        r.name_guess,
-                        float(r.score),
-                        float(r.similarity),
-                        int(r.skill_overlap_count),
-                        int(r.jd_skills_count),
-                        json.dumps(r.matched_skills),
-                        json.dumps(r.skills),
-                    )
-                    for r in results
-                ],
             )
 
         return render_template(
@@ -439,6 +526,22 @@ def create_app() -> Flask:
             ats_draft=ats_draft,
             ats_draft_report=ats_draft_report,
             ats_draft_suggestions=ats_draft_suggestions,
+        )
+
+    @app.post("/ats-draft-pdf")
+    def ats_draft_pdf():
+        draft = (request.form.get("draft") or "").strip()
+        if not draft:
+            abort(400)
+
+        stem = _safe_download_stem(request.form.get("filename") or "")
+        pdf_buf = _draft_text_to_pdf_bytes(draft, title=None)
+
+        return send_file(
+            pdf_buf,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"ATS_Optimized_{stem}.pdf",
         )
 
     return app

@@ -142,10 +142,10 @@
           {% endif %}
 
           <div class="actions" style="margin-top:12px">
-            <button type="button" id="downloadAtsDraft" class="btn-secondary">Download .txt</button>
+            <button type="button" id="downloadAtsDraftPdf" class="btn-secondary">Download PDF</button>
           </div>
           <div class="hint">Tip: Review and edit this draft before using it for real applications.</div>
-          <textarea id="atsDraftText" readonly style="margin-top:10px;min-height:260px">{{ ats_draft }}</textarea>
+          <textarea id="atsDraftText" readonly data-filename="{{ ats_report.filename }}" style="margin-top:10px;min-height:260px">{{ ats_draft }}</textarea>
         </div>
       {% endif %}
     </section>
